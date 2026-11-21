@@ -72,12 +72,21 @@ void ssh_free(ssh_session session) {
     if (session == NULL) return;
 
     ssh_socket_free(session->socket);
-    session->socket = NULL;
 
     ssh_buffer_free(session->in_buffer);
     ssh_buffer_free(session->out_buffer);
+    ssh_buffer_free(session->in_hashbuf);
+    ssh_buffer_free(session->out_hashbuf);
 
+    crypto_free(session->current_crypto);
     crypto_free(session->next_crypto);
+    free(session->client_id_str);
+    free(session->server_id_str);
+    free(session->opts.username);
+    free(session->opts.host);
+    free(session->opts.sshdir);
+    free(session->opts.knownhosts);
+    free(session);
 }
 
 int ssh_options_set(ssh_session session, enum ssh_options_e type,
@@ -159,19 +168,15 @@ int ssh_options_set(ssh_session session, enum ssh_options_e type,
  * @return int
  */
 int send_id_str(ssh_session session) {
-    const char *id_str = CLIENT_ID_STR;
-    const char *terminator = "\r\n";
-    /* The maximum banner length is 255 for SSH2 */
-    char buffer[256] = {0};
-    size_t len;
-    int rc = SSH_ERROR;
+    const char wire_id[] = CLIENT_ID_STR "\r\n";
 
-    session->client_id_str = strdup(id_str);
-    snprintf(buffer, sizeof(buffer), "%s%s", session->client_id_str,
-             terminator);
+    session->client_id_str = strdup(CLIENT_ID_STR);
+    if (session->client_id_str == NULL) return SSH_ERROR;
 
-    rc = ssh_socket_write(session->socket, buffer, strlen(buffer));
-    return rc;
+    if (ssh_socket_write(session->socket, wire_id, sizeof(wire_id) - 1) < 0) {
+        return SSH_ERROR;
+    }
+    return SSH_OK;
 }
 
 /**
@@ -181,26 +186,41 @@ int send_id_str(ssh_session session) {
  * @return int
  */
 int receive_id_str(ssh_session session) {
-    char buffer[256] = {0};
-    char *ptr = buffer;
+    char line[255];
+    char byte;
 
-    /**
-     * The server MAY send other lines of data before sending the version 
-     * string.  Each line SHOULD be terminated by a Carriage Return and Line
-     * Feed.  Such lines MUST NOT begin with "SSH-", and SHOULD be encoded
-     * in ISO-10646 UTF-8 [RFC3629] (language is not specified).  Clients
-     * MUST be able to process such lines.  Such lines MAY be silently
-     * ignored, or MAY be displayed to the client user.
-     */
+    for (;;) {
+        size_t len = 0;
 
-    /* according to RFC 4253 the max banner length is 255 */
-    for (int i = 0; i < 256; ++i) {
-        ssh_socket_read(session->socket, &buffer[i], 1);
-        // LAB: insert your code here.
+        /* The identification is limited to 255 bytes, including CRLF.
+         * Preceding text lines may be longer. */
+        do {
+            if (ssh_socket_read(session->socket, &byte, 1) != SSH_OK) {
+                return SSH_ERROR;
+            }
+            if (len < sizeof(line)) {
+                line[len++] = byte;
+            }
+        } while (byte != '\n');
 
+        if (len < 4 || memcmp(line, "SSH-", 4) != 0) continue;
+        if (line[len - 1] != '\n') return SSH_ERROR;
+
+        len--;
+        if (len > 0 && line[len - 1] == '\r') len--;
+        if (memchr(line, '\0', len) != NULL) return SSH_ERROR;
+        line[len] = '\0';
+
+        if ((strncmp(line, "SSH-2.0-", 8) != 0 || len <= 8) &&
+            (strncmp(line, "SSH-1.99-", 9) != 0 || len <= 9)) {
+            return SSH_ERROR;
+        }
+
+        session->server_id_str = strdup(line);
+        if (session->server_id_str == NULL) return SSH_ERROR;
+        LOG_NOTICE("server identification: %s", session->server_id_str);
+        return SSH_OK;
     }
-    /* this line should not be reached */
-    return SSH_ERROR;
 }
 
 /**
@@ -298,7 +318,7 @@ int ssh_connect(ssh_session session) {
      *
      */
     rc = ssh_request_auth(session);
-    if (rc == SSH_ERROR) {
+    if (rc != SSH_OK) {
         LOG_ERROR("can not request user authentication");
         goto error;
     }

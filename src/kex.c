@@ -18,226 +18,152 @@
 #include "libsftp/packet.h"
 #include "libsftp/session.h"
 
-/**
- * We only support one specific cipher suite,
- *
- */
-const char *supported_methods[] = {
-    "diffie-hellman-group14-sha256", /* key exchange */
-    "ssh-rsa",                       /* public key algorithm */
-    "aes256-ctr",                    /* cipher algorithm client to server */
-    "aes256-ctr",                    /* cipher algorithm server to client */
-    "hmac-sha1",                     /* MAC algorithm client to server */
-    "hmac-sha1",                     /* MAC algorithm server to client */
-    "none", /* compression algorithm client to server */
-    "none", /* compression algorithm client to server */
-    "",     /* languages client to server */
-    ""};    /* languages server to client */
-
-static int hashbufout_add_cookie(ssh_session session) {
-    int rc;
-
-    session->out_hashbuf = ssh_buffer_new();
-    if (session->out_hashbuf == NULL) {
-        return SSH_ERROR;
-    }
-
-    rc = ssh_buffer_allocate_size(session->out_hashbuf, sizeof(uint8_t) + 16);
-    if (rc < 0) {
-        ssh_buffer_reinit(session->out_hashbuf);
-        return SSH_ERROR;
-    }
-
-    if (ssh_buffer_add_u8(session->out_hashbuf, SSH_MSG_KEXINIT) < 0) {
-        ssh_buffer_reinit(session->out_hashbuf);
-        return SSH_ERROR;
-    }
-
-    if (ssh_buffer_add_data(session->out_hashbuf,
-                            session->next_crypto->client_kex.cookie, 16) < 0) {
-        ssh_buffer_reinit(session->out_hashbuf);
-        return SSH_ERROR;
-    }
-
-    return SSH_OK;
-}
-
-static int hashbufin_add_cookie(ssh_session session, unsigned char *cookie) {
-    int rc;
-
-    session->in_hashbuf = ssh_buffer_new();
-    if (session->in_hashbuf == NULL) {
-        return SSH_ERROR;
-    }
-
-    rc = ssh_buffer_allocate_size(session->in_hashbuf,
-                                  sizeof(uint8_t) + 20 + 16);
-    if (rc < 0) {
-        ssh_buffer_reinit(session->in_hashbuf);
-        return SSH_ERROR;
-    }
-
-    if (ssh_buffer_add_u8(session->in_hashbuf, SSH_MSG_KEXINIT) < 0) {
-        ssh_buffer_reinit(session->in_hashbuf);
-        return SSH_ERROR;
-    }
-    if (ssh_buffer_add_data(session->in_hashbuf, cookie, 16) < 0) {
-        ssh_buffer_reinit(session->in_hashbuf);
-        return SSH_ERROR;
-    }
-
-    return SSH_OK;
-}
+/* The lab advertises one method for each required KEXINIT name-list. */
+static const char *const supported_methods[SSH_KEX_METHODS] = {
+    [SSH_KEX] = "diffie-hellman-group1-sha1",
+    [SSH_HOSTKEYS] = "ssh-rsa",
+    [SSH_CRYPT_C_S] = "aes256-cbc",
+    [SSH_CRYPT_S_C] = "aes256-cbc",
+    [SSH_MAC_C_S] = "hmac-sha1",
+    [SSH_MAC_S_C] = "hmac-sha1",
+    [SSH_COMP_C_S] = "none",
+    [SSH_COMP_S_C] = "none",
+    [SSH_LANG_C_S] = "",
+    [SSH_LANG_S_C] = "",
+};
 
 int ssh_set_client_kex(ssh_session session) {
     struct ssh_kex_struct *client = &session->next_crypto->client_kex;
-    int rc;
 
-    rc = ssh_get_random(client->cookie, 16, 0);
-    if (!rc) {
+    if (!ssh_get_random(client->cookie, sizeof(client->cookie), 0)) {
         LOG_ERROR("PRNG error");
         return SSH_ERROR;
     }
 
-    memset(client->methods, 0, SSH_KEX_METHODS * sizeof(char **));
-
     for (int i = 0; i < SSH_KEX_METHODS; i++) {
         client->methods[i] = strdup(supported_methods[i]);
+        if (client->methods[i] == NULL) return SSH_ERROR;
     }
     return SSH_OK;
 }
 
-/**
- * @brief Send supported cipher suites for algorithm negotiation.
- * 
- * @param session 
- * @return int 
- */
 int ssh_send_kex(ssh_session session) {
     struct ssh_kex_struct *kex = &session->next_crypto->client_kex;
-    ssh_string str = NULL;
-    int rc;
 
-    rc = ssh_buffer_pack(session->out_buffer, "bP", SSH_MSG_KEXINIT, 16,
-                         kex->cookie);
-    if (rc != SSH_OK) goto error;
-
-    if (hashbufout_add_cookie(session) < 0) goto error;
-
-    for (int i = 0; i < SSH_KEX_METHODS; ++i) {
-        str = ssh_string_from_char(kex->methods[i]);
-        if (ssh_buffer_add_ssh_string(session->out_hashbuf, str) < 0) {
-            goto error;
-        }
-        if (ssh_buffer_add_ssh_string(session->out_buffer, str) < 0) {
-            goto error;
-        }
-        ssh_string_free(str);
-    }
-
-    rc = ssh_buffer_pack(session->out_buffer, "bd", 0, 0);
-    rc |= ssh_buffer_pack(session->out_hashbuf, "bd", 0, 0);
-    if (rc != SSH_OK) goto error;
-
-    if (ssh_packet_send(session) != SSH_OK)
-        return SSH_ERROR;  // TODO: or goto error
-    return SSH_OK;
-
-error:
-    ssh_buffer_reinit(session->out_buffer);
-    ssh_buffer_reinit(session->out_hashbuf);
-    ssh_string_free(str);
-    return SSH_ERROR;
-}
-
-/**
- * @brief Wait for algorithm negotiation reply.
- * 
- * @param session 
- * @return int 
- */
-int ssh_receive_kex(ssh_session session) {
-    uint8_t msg_type = 0;
-    ssh_string str = NULL;
-    char *strings[SSH_KEX_METHODS] = {0};
-    int rc = SSH_ERROR;
-    bool first_kex_follows;
-    uint32_t reserved;
-    size_t len;
-
-    rc = ssh_packet_receive(session);
-    if (rc != SSH_OK) goto error;
-
-    ssh_buffer_get_u8(session->in_buffer, &msg_type);
-    if (msg_type != SSH_MSG_KEXINIT) {
-        LOG_ERROR("wrong msg type: received %d expected %d", msg_type,
-                  SSH_MSG_KEXINIT);
+    if (ssh_buffer_pack(session->out_buffer, "bP", SSH_MSG_KEXINIT,
+                        sizeof(kex->cookie), kex->cookie) != SSH_OK) {
         goto error;
     }
 
-    len = ssh_buffer_get_data(session->in_buffer,
-                              session->next_crypto->server_kex.cookie, 16);
-    if (len != 16) goto error;
-
-    rc = hashbufin_add_cookie(session, session->next_crypto->server_kex.cookie);
-    if (rc != SSH_OK) goto error;
-
     for (int i = 0; i < SSH_KEX_METHODS; i++) {
-        /* parse name-lists, don't forget to add `in_hashbuf` */
-        // LAB: insert your code here.
-
+        if (ssh_buffer_pack(session->out_buffer, "s", kex->methods[i])
+                != SSH_OK) {
+            goto error;
+        }
     }
 
-    rc = ssh_buffer_unpack(session->in_buffer, "bd", &first_kex_follows,
-                           &reserved);
-    rc |=
-        ssh_buffer_pack(session->in_hashbuf, "bd", first_kex_follows, reserved);
-    if (rc != SSH_OK) goto error;
-
-    if (first_kex_follows) {
-        /* If server guesses Diffie Hellman Kex, this could block forever.
-         * But if it guesses DH, it shouldn't set `first_kex_follows` to 1
-         */
-        ssh_packet_receive(session);
+    if (ssh_buffer_pack(session->out_buffer, "bd", 0, 0) != SSH_OK) {
+        goto error;
     }
 
-    /* copy the server kex info into the array of strings */
-    for (int i = 0; i < SSH_KEX_METHODS; i++) {
-        session->next_crypto->server_kex.methods[i] = strings[i];
+    session->out_hashbuf = ssh_buffer_new();
+    if (session->out_hashbuf == NULL ||
+        ssh_buffer_add_buffer(session->out_hashbuf, session->out_buffer)
+            != SSH_OK) {
+        goto error;
     }
 
-    return SSH_OK;
+    if (ssh_packet_send(session) == SSH_OK) return SSH_OK;
 
 error:
-    ssh_string_free(str);
-    for (int i = 0; i < SSH_KEX_METHODS; i++) {
-        session->next_crypto->server_kex.methods[i] = NULL;
-        SAFE_FREE(strings[i]);
-    }
+    ssh_buffer_reinit(session->out_buffer);
     return SSH_ERROR;
 }
 
-/**
- * @brief Select an agreed cipher suite based on both ends' negotiation messages.
- * 
- * @param session 
- * @return int 
- */
-int ssh_select_kex(ssh_session session) {
+static bool method_matches(const char *list, size_t len, const char *method) {
+    return strlen(method) == len && memcmp(list, method, len) == 0;
+}
+
+int ssh_receive_kex(ssh_session session) {
     struct ssh_kex_struct *server = &session->next_crypto->server_kex;
     struct ssh_kex_struct *client = &session->next_crypto->client_kex;
+    uint8_t type, first_kex_follows;
+    uint32_t reserved;
 
-    for (int i = 0; i < SSH_KEX_METHODS; ++i) {
-        /* select negotiated algorithms and store them in `next_crypto->kex_methods` */
-        // LAB: insert your code here.
+    if (ssh_packet_receive(session) != SSH_OK) return SSH_ERROR;
 
+    session->in_hashbuf = ssh_buffer_new();
+    if (session->in_hashbuf == NULL ||
+        ssh_buffer_add_buffer(session->in_hashbuf, session->in_buffer)
+            != SSH_OK) {
+        return SSH_ERROR;
     }
-    session->next_crypto->kex_type = SSH_KEX_DH_GROUP14_SHA256;
-    return SSH_OK;
 
-error:
+    if (ssh_buffer_get_u8(session->in_buffer, &type) != 1 ||
+        type != SSH_MSG_KEXINIT ||
+        ssh_buffer_get_data(session->in_buffer, server->cookie,
+                            sizeof(server->cookie)) != sizeof(server->cookie)) {
+        return SSH_ERROR;
+    }
+
     for (int i = 0; i < SSH_KEX_METHODS; i++) {
-        SAFE_FREE(session->next_crypto->kex_methods[i]);
+        if (ssh_buffer_unpack(session->in_buffer, "s", &server->methods[i])
+                != SSH_OK) {
+            return SSH_ERROR;
+        }
     }
-    return SSH_ERROR;
+
+    if (ssh_buffer_unpack(session->in_buffer, "bd", &first_kex_follows,
+                          &reserved) != SSH_OK) {
+        return SSH_ERROR;
+    }
+
+    const char *kex_guess = server->methods[SSH_KEX];
+    const char *hostkey_guess = server->methods[SSH_HOSTKEYS];
+    session->first_kex_follows_guess_wrong =
+        first_kex_follows &&
+        (!method_matches(kex_guess, strcspn(kex_guess, ","),
+                         client->methods[SSH_KEX]) ||
+         !method_matches(hostkey_guess, strcspn(hostkey_guess, ","),
+                         client->methods[SSH_HOSTKEYS]));
+    return SSH_OK;
+}
+
+int ssh_select_kex(ssh_session session) {
+    struct ssh_crypto_struct *crypto = session->next_crypto;
+
+    for (int i = SSH_KEX; i <= SSH_COMP_S_C; i++) {
+        const char *method = crypto->client_kex.methods[i];
+        const char *name = crypto->server_kex.methods[i];
+
+        for (;;) {
+            size_t len = strcspn(name, ",");
+            if (method_matches(name, len, method)) break;
+            if (name[len] == '\0') {
+                LOG_ERROR("no common algorithm for KEXINIT list %d", i);
+                return SSH_ERROR;
+            }
+            name += len + 1;
+        }
+
+        crypto->kex_methods[i] = strdup(method);
+        if (crypto->kex_methods[i] == NULL) return SSH_ERROR;
+    }
+    crypto->kex_type = SSH_KEX_DH_GROUP1_SHA1;
+
+    if (session->first_kex_follows_guess_wrong) {
+        if (ssh_packet_receive(session) != SSH_OK) return SSH_ERROR;
+        session->first_kex_follows_guess_wrong = 0;
+    }
+
+    LOG_NOTICE("negotiated KEX=%s hostkey=%s "
+               "client-to-server=%s/%s/%s server-to-client=%s/%s/%s",
+               crypto->kex_methods[SSH_KEX], crypto->kex_methods[SSH_HOSTKEYS],
+               crypto->kex_methods[SSH_CRYPT_C_S],
+               crypto->kex_methods[SSH_MAC_C_S],
+               crypto->kex_methods[SSH_COMP_C_S],
+               crypto->kex_methods[SSH_CRYPT_S_C],
+               crypto->kex_methods[SSH_MAC_S_C],
+               crypto->kex_methods[SSH_COMP_S_C]);
+    return SSH_OK;
 }

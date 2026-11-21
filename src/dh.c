@@ -20,12 +20,6 @@
 #include "libsftp/session.h"
 #include "libsftp/util.h"
 
-/*
- * How many bits of security we want for fast DH. DH private key size must be
- * twice that size.
- */
-#define DH_SECURITY_BITS 512
-
 struct dh_keypair {
     bignum priv_key;
     bignum pub_key;
@@ -38,136 +32,28 @@ struct dh_ctx {
     bignum modulus;
 };
 
-static bignum ssh_dh_generator;
-static bignum ssh_dh_group14;
-
-static unsigned char p_group14_value[] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xC9, 0x0F, 0xDA, 0xA2,
-    0x21, 0x68, 0xC2, 0x34, 0xC4, 0xC6, 0x62, 0x8B, 0x80, 0xDC, 0x1C, 0xD1,
-    0x29, 0x02, 0x4E, 0x08, 0x8A, 0x67, 0xCC, 0x74, 0x02, 0x0B, 0xBE, 0xA6,
-    0x3B, 0x13, 0x9B, 0x22, 0x51, 0x4A, 0x08, 0x79, 0x8E, 0x34, 0x04, 0xDD,
-    0xEF, 0x95, 0x19, 0xB3, 0xCD, 0x3A, 0x43, 0x1B, 0x30, 0x2B, 0x0A, 0x6D,
-    0xF2, 0x5F, 0x14, 0x37, 0x4F, 0xE1, 0x35, 0x6D, 0x6D, 0x51, 0xC2, 0x45,
-    0xE4, 0x85, 0xB5, 0x76, 0x62, 0x5E, 0x7E, 0xC6, 0xF4, 0x4C, 0x42, 0xE9,
-    0xA6, 0x37, 0xED, 0x6B, 0x0B, 0xFF, 0x5C, 0xB6, 0xF4, 0x06, 0xB7, 0xED,
-    0xEE, 0x38, 0x6B, 0xFB, 0x5A, 0x89, 0x9F, 0xA5, 0xAE, 0x9F, 0x24, 0x11,
-    0x7C, 0x4B, 0x1F, 0xE6, 0x49, 0x28, 0x66, 0x51, 0xEC, 0xE4, 0x5B, 0x3D,
-    0xC2, 0x00, 0x7C, 0xB8, 0xA1, 0x63, 0xBF, 0x05, 0x98, 0xDA, 0x48, 0x36,
-    0x1C, 0x55, 0xD3, 0x9A, 0x69, 0x16, 0x3F, 0xA8, 0xFD, 0x24, 0xCF, 0x5F,
-    0x83, 0x65, 0x5D, 0x23, 0xDC, 0xA3, 0xAD, 0x96, 0x1C, 0x62, 0xF3, 0x56,
-    0x20, 0x85, 0x52, 0xBB, 0x9E, 0xD5, 0x29, 0x07, 0x70, 0x96, 0x96, 0x6D,
-    0x67, 0x0C, 0x35, 0x4E, 0x4A, 0xBC, 0x98, 0x04, 0xF1, 0x74, 0x6C, 0x08,
-    0xCA, 0x18, 0x21, 0x7C, 0x32, 0x90, 0x5E, 0x46, 0x2E, 0x36, 0xCE, 0x3B,
-    0xE3, 0x9E, 0x77, 0x2C, 0x18, 0x0E, 0x86, 0x03, 0x9B, 0x27, 0x83, 0xA2,
-    0xEC, 0x07, 0xA2, 0x8F, 0xB5, 0xC5, 0x5D, 0xF0, 0x6F, 0x4C, 0x52, 0xC9,
-    0xDE, 0x2B, 0xCB, 0xF6, 0x95, 0x58, 0x17, 0x18, 0x39, 0x95, 0x49, 0x7C,
-    0xEA, 0x95, 0x6A, 0xE5, 0x15, 0xD2, 0x26, 0x18, 0x98, 0xFA, 0x05, 0x10,
-    0x15, 0x72, 0x8E, 0x5A, 0x8A, 0xAC, 0xAA, 0x68, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF};
-
-#define P_GROUP14_LEN 256 /* Size in bytes of the p number for group 14 */
-
 static int dh_keypair_gen_keys(struct dh_ctx *ctx, int peer);
 static int dh_keypair_get_keys(struct dh_ctx *ctx, int peer, const_bignum *priv,
                                const_bignum *pub);
 static int dh_keypair_set_keys(struct dh_ctx *ctx, int peer, bignum priv,
                                bignum pub);
-static int dh_set_parameters(struct dh_ctx *ctx, bignum modulus,
-                             bignum generator);
-static int dh_get_parameters(struct dh_ctx *ctx, const_bignum *modulus,
-                             const_bignum *generator);
-static void dh_free_modulus(struct dh_ctx *ctx);
-static void dh_free_generator(struct dh_ctx *ctx);
 static int dh_init_keypair(struct dh_keypair *keypair);
 static void dh_free_keypair(struct dh_keypair *keypair);
 
-static void ssh_dh_debug_crypto(struct ssh_crypto_struct *c) {
-#ifdef DEBUG_CRYPTO
-    const_bignum x = NULL, y = NULL, e = NULL, f = NULL;
-
-    ssh_dh_keypair_get_keys(c->dh_ctx, DH_CLIENT_KEYPAIR, &x, &e);
-    ssh_dh_keypair_get_keys(c->dh_ctx, DH_SERVER_KEYPAIR, &y, &f);
-    ssh_print_bignum("p", c->dh_ctx->modulus);
-    ssh_print_bignum("g", c->dh_ctx->generator);
-    ssh_print_bignum("x", x);
-    ssh_print_bignum("y", y);
-    ssh_print_bignum("e", e);
-    ssh_print_bignum("f", f);
-
-    ssh_log_hexdump("Session server cookie", c->server_kex.cookie, 16);
-    ssh_log_hexdump("Session client cookie", c->client_kex.cookie, 16);
-    ssh_print_bignum("k", c->shared_secret);
-#else
-    (void)c; /* UNUSED_PARAM */
-#endif
-}
-
 static int dh_init(ssh_session session) {
     struct ssh_crypto_struct *crypto = session->next_crypto;
-    const_bignum pubkey;
-    struct dh_ctx *ctx = NULL;
-    int rc;
+    struct dh_ctx *ctx = calloc(1, sizeof(*ctx));
 
-    ssh_dh_generator = bignum_new();
-    rc = bignum_set_word(ssh_dh_generator, 2);
-    if (rc != 1) return SSH_ERROR;
-
-    bignum_bin2bn(p_group14_value, P_GROUP14_LEN, &ssh_dh_group14);
-    if (ssh_dh_group14 == NULL) return SSH_ERROR;
-
-    /* DH context initialization */
-    ctx = calloc(1, sizeof(*ctx));
     if (ctx == NULL) return SSH_ERROR;
-
-    rc = dh_set_parameters(ctx, ssh_dh_group14, ssh_dh_generator);
     crypto->dh_ctx = ctx;
-    if (rc != SSH_OK) {
-        dh_cleanup(crypto);
+
+    /* SSH group1 uses the 1024-bit Oakley Group 2 prime. */
+    ctx->modulus = BN_get_rfc2409_prime_1024(NULL);
+    ctx->generator = bignum_new();
+    if (ctx->modulus == NULL || ctx->generator == NULL ||
+        bignum_set_word(ctx->generator, 2) != 1 ||
+        dh_init_keypair(&ctx->keypair[DH_CLIENT_KEYPAIR]) != SSH_OK) {
         return SSH_ERROR;
-    }
-
-    return SSH_OK;
-}
-
-static int dh_set_parameters(struct dh_ctx *ctx, bignum modulus,
-                             bignum generator) {
-    int rc;
-
-    if ((ctx == NULL) || ((modulus == NULL) && (generator == NULL))) {
-        return SSH_ERROR;
-    }
-
-    rc = dh_init_keypair(&ctx->keypair[DH_CLIENT_KEYPAIR]);
-    if (rc != SSH_OK) {
-        return SSH_ERROR;
-    }
-    rc = dh_init_keypair(&ctx->keypair[DH_SERVER_KEYPAIR]);
-    if (rc != SSH_OK) {
-        return SSH_ERROR;
-    }
-
-    if (modulus) {
-        dh_free_modulus(ctx);
-        ctx->modulus = modulus;
-    }
-    if (generator) {
-        dh_free_generator(ctx);
-        ctx->generator = generator;
-    }
-
-    return SSH_OK;
-}
-
-static int dh_get_parameters(struct dh_ctx *ctx, const_bignum *modulus,
-                             const_bignum *generator) {
-    if (ctx == NULL) {
-        return SSH_ERROR;
-    }
-    if (modulus) {
-        *modulus = ctx->modulus;
-    }
-    if (generator) {
-        *generator = ctx->generator;
     }
 
     return SSH_OK;
@@ -183,58 +69,36 @@ void dh_cleanup(struct ssh_crypto_struct *crypto) {
     dh_free_keypair(&ctx->keypair[DH_CLIENT_KEYPAIR]);
     dh_free_keypair(&ctx->keypair[DH_SERVER_KEYPAIR]);
 
-    dh_free_modulus(ctx);
-    dh_free_generator(ctx);
-    SAFE_FREE(ctx);
-    crypto->dh_ctx = NULL;
-
-    bignum_safe_free(ssh_dh_generator);
-    bignum_safe_free(ssh_dh_group14);
+    bignum_safe_free(ctx->modulus);
+    bignum_safe_free(ctx->generator);
+    SAFE_FREE(crypto->dh_ctx);
 }
 
 static int dh_keypair_gen_keys(struct dh_ctx *dh_ctx, int peer) {
-    bignum tmp = NULL;
-    bignum_CTX ctx = NULL;
-    int rc = 0;
-    int bits = 0;
-    int p_bits = 0;
+    struct dh_keypair *keys = &dh_ctx->keypair[peer];
+    bignum q = bignum_new();
+    bignum_CTX ctx = bignum_ctx_new();
+    int rc = SSH_ERROR;
 
-    ctx = bignum_ctx_new();
-    if (bignum_ctx_invalid(ctx)) {
-        goto error;
+    if (q == NULL || ctx == NULL ||
+        bignum_rshift1(q, dh_ctx->modulus) != 1) {
+        goto done;
     }
-    tmp = bignum_new();
-    if (tmp == NULL) {
-        goto error;
+
+    /* q = (p - 1) / 2. The private exponent must satisfy 1 < x < q. */
+    do {
+        if (bignum_rand_range(keys->priv_key, q) != 1) goto done;
+    } while (bignum_cmp(keys->priv_key, BN_value_one()) <= 0);
+
+    if (bignum_mod_exp(keys->pub_key, dh_ctx->generator, keys->priv_key,
+                       dh_ctx->modulus, ctx) == 1) {
+        rc = SSH_OK;
     }
-    p_bits = bignum_num_bits(dh_ctx->modulus);
-    /* we need at most DH_SECURITY_BITS */
-    bits = MIN(DH_SECURITY_BITS * 2, p_bits);
-    /* ensure we're not too close of p so rnd()%p stays uniform */
-    if (bits <= p_bits && bits + 64 > p_bits) {
-        bits += 64;
-    }
-    rc = bignum_rand(tmp, bits);
-    if (rc != 1) {
-        goto error;
-    }
-    rc = bignum_mod(dh_ctx->keypair[peer].priv_key, tmp, dh_ctx->modulus, ctx);
-    if (rc != 1) {
-        goto error;
-    }
-    /* Now compute the corresponding public key */
-    rc = bignum_mod_exp(dh_ctx->keypair[peer].pub_key, dh_ctx->generator,
-                        dh_ctx->keypair[peer].priv_key, dh_ctx->modulus, ctx);
-    if (rc != 1) {
-        goto error;
-    }
-    bignum_safe_free(tmp);
+
+done:
+    bignum_safe_free(q);
     bignum_ctx_free(ctx);
-    return SSH_OK;
-error:
-    bignum_safe_free(tmp);
-    bignum_ctx_free(ctx);
-    return SSH_ERROR;
+    return rc;
 }
 
 static int dh_keypair_get_keys(struct dh_ctx *ctx, int peer, const_bignum *priv,
@@ -281,17 +145,6 @@ static int dh_keypair_set_keys(struct dh_ctx *ctx, int peer, bignum priv,
         ctx->keypair[peer].pub_key = pub;
     }
     return SSH_OK;
-}
-
-static void dh_free_modulus(struct dh_ctx *ctx) {
-    bignum_safe_free(ctx->modulus);
-    ctx->modulus = NULL;
-}
-
-static void dh_free_generator(struct dh_ctx *ctx) {
-    if (ctx->generator != ssh_dh_generator) {
-        bignum_safe_free(ctx->generator);
-    }
 }
 
 static void dh_free_keypair(struct dh_keypair *keypair) {
@@ -356,27 +209,26 @@ done:
  * @return int
  */
 static int dh_compute_session_id(ssh_session session) {
-    ssh_buffer server_hash = NULL;
-    ssh_buffer client_hash = NULL;
-    ssh_buffer buf = NULL;
+    ssh_buffer server_hash = session->in_hashbuf;
+    ssh_buffer client_hash = session->out_hashbuf;
+    uint32_t server_hash_len = ssh_buffer_get_len(server_hash);
+    uint32_t client_hash_len = ssh_buffer_get_len(client_hash);
+    ssh_buffer buf = ssh_buffer_new();
     const_bignum client_pubkey, server_pubkey;
     int rc;
 
-    buf = ssh_buffer_new();
     if (buf == NULL) return SSH_ERROR;
 
     rc = ssh_buffer_pack(buf, "ss", session->client_id_str,
                          session->server_id_str);
     if (rc != SSH_OK) goto error;
 
-    server_hash = session->in_hashbuf;
-    client_hash = session->out_hashbuf;
-
-    rc = ssh_buffer_pack(
-        buf, "dPdPS", ssh_buffer_get_len(client_hash),
-        ssh_buffer_get_len(client_hash), ssh_buffer_get(client_hash),
-        ssh_buffer_get_len(server_hash), ssh_buffer_get_len(server_hash),
-        ssh_buffer_get(server_hash), session->next_crypto->server_pubkey_blob);
+    rc = ssh_buffer_pack(buf, "dPdPS",
+                         client_hash_len, (size_t)client_hash_len,
+                         ssh_buffer_get(client_hash),
+                         server_hash_len, (size_t)server_hash_len,
+                         ssh_buffer_get(server_hash),
+                         session->next_crypto->server_pubkey_blob);
     if (rc != SSH_OK) goto error;
 
     rc = dh_keypair_get_keys(session->next_crypto->dh_ctx, DH_CLIENT_KEYPAIR,
@@ -389,24 +241,25 @@ static int dh_compute_session_id(ssh_session session) {
                          session->next_crypto->shared_secret);
     if (rc != SSH_OK) goto error;
 
-    if (session->next_crypto->kex_type != SSH_KEX_DH_GROUP14_SHA256) goto error;
-    session->next_crypto->digest_len = SHA256_DIGEST_LENGTH;
-    session->next_crypto->digest_type = SSH_KDF_SHA256;
+    session->next_crypto->digest_len = SHA_DIGEST_LENGTH;
+    session->next_crypto->digest_type = SSH_KDF_SHA1;
     session->next_crypto->secret_hash =
         malloc(session->next_crypto->digest_len);
     if (session->next_crypto->secret_hash == NULL) goto error;
-    sha256(ssh_buffer_get(buf), ssh_buffer_get_len(buf),
-           session->next_crypto->secret_hash);
+    sha1(ssh_buffer_get(buf), ssh_buffer_get_len(buf),
+         session->next_crypto->secret_hash);
 
     if (session->next_crypto->session_id == NULL) {
         session->next_crypto->session_id_len = session->next_crypto->digest_len;
         session->next_crypto->session_id =
             malloc(session->next_crypto->session_id_len);
+        if (session->next_crypto->session_id == NULL) goto error;
         memcpy(session->next_crypto->session_id,
                session->next_crypto->secret_hash,
                session->next_crypto->session_id_len);
     }
 
+    ssh_buffer_free(buf);
     return SSH_OK;
 error:
     ssh_buffer_free(buf);
@@ -496,6 +349,8 @@ static int dh_gen_session_keys(ssh_session session) {
         goto error;
     }
 
+    ssh_string_burn(k_string);
+    ssh_string_free(k_string);
     crypto->encryptIV = IV_cli_to_srv;
     crypto->decryptIV = IV_srv_to_cli;
     crypto->encryptkey = enckey_cli_to_srv;
@@ -525,6 +380,7 @@ static int dh_gen_session_keys(ssh_session session) {
     return SSH_OK;
 
 error:
+    if (k_string != NULL) ssh_string_burn(k_string);
     ssh_string_free(k_string);
     SAFE_FREE(IV_cli_to_srv);
     SAFE_FREE(IV_srv_to_cli);
@@ -574,73 +430,81 @@ static int dh_send_init(ssh_session session) {
  */
 static int dh_receive_reply(ssh_session session) {
     struct ssh_crypto_struct *crypto = session->next_crypto;
-    bignum server_pubkey;
+    ssh_string encoded_pubkey = NULL;
+    bignum server_pubkey = NULL;
     uint8_t type;
     int rc;
 
-    rc = ssh_packet_receive(session);
-    if (rc != SSH_OK) return rc;
+    if (ssh_packet_receive(session) != SSH_OK ||
+        ssh_buffer_get_u8(session->in_buffer, &type) != 1 ||
+        type != SSH_MSG_KEXDH_REPLY) {
+        return SSH_ERROR;
+    }
 
-    ssh_buffer_get_u8(session->in_buffer, &type);
-    if (type != SSH_MSG_KEXDH_REPLY) return SSH_ERROR;
-
-    rc = ssh_buffer_unpack(session->in_buffer, "SBS",
-                           &crypto->server_pubkey_blob, &server_pubkey,
+    rc = ssh_buffer_unpack(session->in_buffer, "SSS",
+                           &crypto->server_pubkey_blob, &encoded_pubkey,
                            &crypto->dh_server_signature);
-    if (rc != SSH_OK) return rc;
+    if (rc != SSH_OK) return SSH_ERROR;
+
+    if (ssh_string_len(encoded_pubkey) != 0 &&
+        (encoded_pubkey->data[0] & 0x80) == 0) {
+        server_pubkey = ssh_make_string_bn(encoded_pubkey);
+    }
+    ssh_string_free(encoded_pubkey);
+
+    /* The server DH value f must be in [1, p - 1]. */
+    if (server_pubkey == NULL || BN_is_zero(server_pubkey) ||
+        bignum_cmp(server_pubkey, crypto->dh_ctx->modulus) >= 0) {
+        bignum_safe_free(server_pubkey);
+        return SSH_ERROR;
+    }
 
     rc = dh_keypair_set_keys(crypto->dh_ctx, DH_SERVER_KEYPAIR, NULL,
-                             server_pubkey);
+                            server_pubkey);
     if (rc != SSH_OK) {
         bignum_safe_free(server_pubkey);
         return rc;
     }
 
-    /* Skip: check server public key */
-    /* Waht should we do next? */
-    // LAB: insert your code here.
+    /* The lab does not verify the server host key or its signature. */
+    rc = dh_compute_shared_secret(crypto->dh_ctx, DH_CLIENT_KEYPAIR,
+                                  DH_SERVER_KEYPAIR, &crypto->shared_secret);
+    if (rc != SSH_OK) return rc;
 
-
-    /* Skip: verifies signature on H (session id) */
+    rc = dh_compute_session_id(session);
+    if (rc != SSH_OK) return rc;
 
     rc = ssh_crypto_set_algo(session);
-    if (rc != SSH_OK) return rc;
+    if (rc != SSH_OK || crypto->in_cipher == NULL || crypto->out_cipher == NULL)
+        return SSH_ERROR;
 
-    rc = dh_gen_session_keys(session);
-    if (rc != SSH_OK) return rc;
-
-    rc = ssh_buffer_add_u8(session->out_buffer, SSH_MSG_NEWKEYS);
-    rc |= ssh_packet_send(session);
-    if (rc != SSH_OK) return rc;
-
-    return SSH_OK;
+    return dh_gen_session_keys(session);
 }
 
 /**
- * @brief Wait for SSH_MSG_NEWKEYS from server and put newly generated session
- * keys into use.
- * @see RFC 4253 section 8
- * @param session
- * @return int
+ * @brief Exchange NEWKEYS and activate the keys in each direction.
  */
 static int dh_set_new_keys(ssh_session session) {
     struct ssh_crypto_struct *crypto = session->next_crypto;
     uint8_t type;
-    int rc;
 
-    rc = ssh_packet_receive(session);
-    if (rc != SSH_OK) return rc;
+    if (ssh_buffer_add_u8(session->out_buffer, SSH_MSG_NEWKEYS) != SSH_OK ||
+        ssh_packet_send(session) != SSH_OK) {
+        return SSH_ERROR;
+    }
 
-    ssh_buffer_get_u8(session->in_buffer, &type);
-    if (type != SSH_MSG_NEWKEYS) return SSH_ERROR;
-
-    /* NEWKEYS received, now its time to activate encryption */
-    // LAB: insert your code here.
-
-
-    /* next_crypto should be deprecated from now if re-kex is not supportes */
+    session->current_crypto = crypto;
     session->next_crypto = NULL;
+    crypto->used = SSH_DIRECTION_OUT;
 
+    if (ssh_packet_receive(session) != SSH_OK ||
+        ssh_buffer_get_u8(session->in_buffer, &type) != 1 ||
+        type != SSH_MSG_NEWKEYS ||
+        ssh_buffer_get_len(session->in_buffer) != 0) {
+        return SSH_ERROR;
+    }
+
+    crypto->used = SSH_DIRECTION_BOTH;
     return SSH_OK;
 }
 
@@ -665,7 +529,7 @@ int ssh_dh_handshake(ssh_session session) {
     rc = dh_receive_reply(session);
     if (rc != SSH_OK) goto error;
 
-    /* recive NEWKEYS */
+    /* Exchange NEWKEYS. */
     rc = dh_set_new_keys(session);
     if (rc != SSH_OK) goto error;
 

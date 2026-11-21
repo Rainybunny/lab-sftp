@@ -45,19 +45,28 @@ static int getai(const char *host, int port, struct addrinfo **ai) {
 
 ssh_socket ssh_socket_new() {
     ssh_socket s = calloc(1, sizeof(struct ssh_socket_struct));
+    if (s == NULL) return NULL;
+    s->fd = -1;
     s->in_buffer = ssh_buffer_new();
+    if (s->in_buffer == NULL) {
+        free(s);
+        return NULL;
+    }
     return s;
 }
 
 void ssh_socket_close(ssh_socket s) {
-    if(s->fd > 0) {
+    if (s->fd >= 0) {
         close(s->fd);
+        s->fd = -1;
     }
 }
 
 void ssh_socket_free(ssh_socket s) {
     if (s == NULL) return;
+    ssh_socket_close(s);
     ssh_buffer_free(s->in_buffer);
+    free(s);
 }
 
 int ssh_socket_connect(ssh_socket s, const char *host, uint16_t port,
@@ -87,6 +96,10 @@ int ssh_socket_connect(ssh_socket s, const char *host, uint16_t port,
         }
         break;
     }
+    if (itr == NULL) {
+        freeaddrinfo(ai);
+        return SSH_ERROR;
+    }
     freeaddrinfo(ai);
 
     ssh_socket_set_fd(s, fd);
@@ -96,7 +109,16 @@ int ssh_socket_connect(ssh_socket s, const char *host, uint16_t port,
 void ssh_socket_set_fd(ssh_socket s, int fd) { s->fd = fd; }
 
 int ssh_socket_write(ssh_socket s, const void *buffer, size_t len) {
-    return write(s->fd, buffer, len);
+    const uint8_t *data = buffer;
+    size_t written = 0;
+
+    while (written < len) {
+        ssize_t n = write(s->fd, data + written, len - written);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) return SSH_ERROR;
+        written += n;
+    }
+    return written;
 }
 
 int ssh_socket_read(ssh_socket s, void *buffer, size_t len) {
@@ -105,12 +127,16 @@ int ssh_socket_read(ssh_socket s, void *buffer, size_t len) {
     while (ssh_buffer_get_len(s->in_buffer) < len) {
         char tmp[256];
         readn = read(s->fd, tmp, sizeof(tmp));
-        if (readn < 0) {
+        if (readn < 0 && errno == EINTR) continue;
+        if (readn <= 0) {
             LOG_ERROR("read error on fd %d", s->fd);
-            ssh_set_error(SSH_FATAL, "socket %d read error", s->fd);
+            ssh_set_error(SSH_FATAL, readn == 0 ? "socket %d closed by peer"
+                                              : "socket %d read error", s->fd);
             return SSH_ERROR;
         }
-        ssh_buffer_add_data(s->in_buffer, tmp, readn);
+        if (ssh_buffer_add_data(s->in_buffer, tmp, readn) < 0) {
+            return SSH_ERROR;
+        }
     }
 
     ssh_buffer_get_data(s->in_buffer, buffer, len);
