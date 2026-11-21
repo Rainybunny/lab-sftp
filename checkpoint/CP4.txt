@@ -2,5 +2,5 @@ The server returned SSH_MSG_USERAUTH_SUCCESS (message type 52), confirming succe
 
 Line 20 ~ 21 in session.typescript:
 
-17:16:28:467675    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=52, len=12, padding_size=10, payload=1]
-17:16:28:467711   [NOTICE] ssh_userauth_password (auth.c:246) - password authentication succeeded (SSH_MSG_USERAUTH_SUCCESS)
+23:25:45:766990    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=52, len=12, padding_size=10, payload=1]
+23:25:45:767140   [NOTICE] ssh_userauth_password (auth.c:246) - password authentication succeeded (SSH_MSG_USERAUTH_SUCCESS)

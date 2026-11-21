@@ -2,4 +2,4 @@ The connection negotiated diffie-hellman-group1-sha1 for key exchange and ssh-rs
 
 Line 8 in session.typescript:
 
-17:16:24:807053   [NOTICE] ssh_select_kex (kex.c:159) - negotiated KEX=diffie-hellman-group1-sha1 hostkey=ssh-rsa client-to-server=aes256-cbc/hmac-sha1/none server-to-client=aes256-cbc/hmac-sha1/none
+23:25:45:606482   [NOTICE] ssh_select_kex (kex.c:159) - negotiated KEX=diffie-hellman-group1-sha1 hostkey=ssh-rsa client-to-server=aes256-cbc/hmac-sha1/none server-to-client=aes256-cbc/hmac-sha1/none

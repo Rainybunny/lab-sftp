@@ -1,59 +1,59 @@
-Script started on 2026-11-21 17:16:24+08:00 [COMMAND="sh test/roundtrip.sh lab@127.0.0.1" TERM="xterm-256color" TTY="/dev/pts/11" COLUMNS="96" LINES="19"]
+Script started on 2026-11-21 23:25:45+08:00 [TERM="xterm-256color" TTY="/dev/pts/6" COLUMNS="-1" LINES="-1"]
 In the client, enter: put send/client.c, get client.c, then bye.
-17:16:24:805102    [DEBUG] ssh_connect (session.c:254) - connected to server by fd 3
-[0m17:16:24:805195    [DEBUG] ssh_connect (session.c:264) - client id sent
-[0m[32;1m17:16:24:805857   [NOTICE] receive_id_str (session.c:221) - server identification: SSH-2.0-paramiko_3.5.1
-[0m17:16:24:806996    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=20, len=148, padding_size=6,payload=141]
-[0m17:16:24:807034    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=20, len=180, padding_size=9, payload=170]
-[0m[32;1m17:16:24:807053   [NOTICE] ssh_select_kex (kex.c:159) - negotiated KEX=diffie-hellman-group1-sha1 hostkey=ssh-rsa client-to-server=aes256-cbc/hmac-sha1/none server-to-client=aes256-cbc/hmac-sha1/none
-[0m[32;1m17:16:24:807083   [NOTICE] ssh_connect (session.c:304) - kex negotiation succeed
-[0m17:16:24:807320    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=30, len=140, padding_size=5,payload=134]
-[0m17:16:24:853594    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=31, len=700, padding_size=7, payload=692]
-[0m17:16:24:854181    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=21, len=12, padding_size=10,payload=1]
-[0m17:16:24:854220    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=21, len=12, padding_size=10, payload=1]
-[0m17:16:24:854284    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=5, len=28, padding_size=10,payload=17]
-[0m17:16:24:854570    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=6, len=28, padding_size=10, payload=17]
+23:25:45:602053    [DEBUG] ssh_connect (session.c:254) - connected to server by fd 3
+[0m23:25:45:602227    [DEBUG] ssh_connect (session.c:264) - client id sent
+[0m[32;1m23:25:45:603183   [NOTICE] receive_id_str (session.c:221) - server identification: SSH-2.0-paramiko_3.5.1
+[0m23:25:45:605837    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=20, len=148, padding_size=6,payload=141]
+[0m23:25:45:605949    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=20, len=180, padding_size=9, payload=170]
+[0m[32;1m23:25:45:606482   [NOTICE] ssh_select_kex (kex.c:159) - negotiated KEX=diffie-hellman-group1-sha1 hostkey=ssh-rsa client-to-server=aes256-cbc/hmac-sha1/none server-to-client=aes256-cbc/hmac-sha1/none
+[0m[32;1m23:25:45:606575   [NOTICE] ssh_connect (session.c:304) - kex negotiation succeed
+[0m23:25:45:607219    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=30, len=140, padding_size=6,payload=133]
+[0m23:25:45:663123    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=31, len=700, padding_size=8, payload=691]
+[0m23:25:45:664093    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=21, len=12, padding_size=10,payload=1]
+[0m23:25:45:664162    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=21, len=12, padding_size=10, payload=1]
+[0m23:25:45:664262    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=5, len=28, padding_size=10,payload=17]
+[0m23:25:45:714401    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=6, len=28, padding_size=10, payload=17]
 [0mpassword: 
-17:16:28:467373    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=50, len=60, padding_size=10,payload=49]
-[0m17:16:28:467455    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=53, len=44, padding_size=7, payload=36]
+23:25:45:715468    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=50, len=60, padding_size=4,payload=55]
+[0m23:25:45:715618    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=53, len=44, padding_size=7, payload=36]
 [0mMini SFTP lab test server
-17:16:28:467675    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=52, len=12, padding_size=10, payload=1]
-[0m[32;1m17:16:28:467711   [NOTICE] ssh_userauth_password (auth.c:246) - password authentication succeeded (SSH_MSG_USERAUTH_SUCCESS)
-[0m17:16:28:467784    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=90, len=44, padding_size=19,payload=24]
-[0m17:16:28:468029    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=91, len=28, padding_size=10, payload=17]
-[0m[32;1m17:16:28:468064   [NOTICE] ssh_channel_open_session (channel.c:190) - channel opened local id=1 window=64000 maxpacket=32768 remote id=0 window=32768 maxpacket=4096
-[0m17:16:28:468134    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=98, len=44, padding_size=16,payload=27]
-[0m17:16:28:468609    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=99, len=12, padding_size=6, payload=5]
-[0m[32;1m17:16:28:468659   [NOTICE] ssh_channel_request_sftp (channel.c:332) - SFTP subsystem request succeeded
-[0m17:16:28:468725    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=28, padding_size=9,payload=18]
-[0m17:16:28:468991    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=60, padding_size=15, payload=44]
-[0m[32;1m17:16:28:469027   [NOTICE] sftp_init (sftp.c:237) - SFTP version 3 initialized
-[0msftp> put send/cline  ent.c
-Enter filename: 17:17:19:593787    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=60, padding_size=17,payload=42]
-[0m17:17:19:594371    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=18, payload=25]
-[0m17:17:19:594496    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=4124, padding_size=18,payload=4105]
-[0m17:17:19:594543    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=2396, padding_size=18,payload=2377]
-[0m17:17:19:594693    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=93, len=28, padding_size=18, payload=9]
-[0m17:17:19:594976    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=6, payload=37]
-[0m17:17:19:595050    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=18,payload=25]
-[0m17:17:19:595338    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=6, payload=37]
+23:25:45:766990    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=52, len=12, padding_size=10, payload=1]
+[0m[32;1m23:25:45:767140   [NOTICE] ssh_userauth_password (auth.c:246) - password authentication succeeded (SSH_MSG_USERAUTH_SUCCESS)
+[0m23:25:45:767373    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=90, len=44, padding_size=19,payload=24]
+[0m23:25:45:768015    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=91, len=28, padding_size=10, payload=17]
+[0m[32;1m23:25:45:768095   [NOTICE] ssh_channel_open_session (channel.c:190) - channel opened local id=1 window=64000 maxpacket=32768 remote id=0 window=32768 maxpacket=4096
+[0m23:25:45:768303    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=98, len=44, padding_size=16,payload=27]
+[0m23:25:45:769154    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=99, len=12, padding_size=6, payload=5]
+[0m[32;1m23:25:45:769301   [NOTICE] ssh_channel_request_sftp (channel.c:332) - SFTP subsystem request succeeded
+[0m23:25:45:769476    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=28, padding_size=9,payload=18]
+[0m23:25:45:769949    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=60, padding_size=15, payload=44]
+[0m[32;1m23:25:45:770061   [NOTICE] sftp_init (sftp.c:237) - SFTP version 3 initialized
+[0msftp> put send/client.c
+Enter filename: 23:25:45:770707    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=60, padding_size=17,payload=42]
+[0m23:25:45:771341    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=44, padding_size=18, payload=25]
+[0m23:25:45:771594    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=4124, padding_size=18,payload=4105]
+[0m23:25:45:771725    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=2396, padding_size=18,payload=2377]
+[0m23:25:45:772060    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=93, len=28, padding_size=18, payload=9]
+[0m23:25:45:772533    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=44, padding_size=6, payload=37]
+[0m23:25:45:772703    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=44, padding_size=18,payload=25]
+[0m23:25:45:773166    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=44, padding_size=6, payload=37]
 [0mclient.c uploaded to the remote home directory
 sftp> get client.c
-Enter filename: 17:17:42:93372    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=5,payload=38]
-[0m17:17:42:93786    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=18, payload=25]
-[0m17:17:42:94006    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=6,payload=37]
-[0m17:17:42:94382    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=6476, padding_size=17, payload=6458]
-[0m17:17:42:94826    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=6,payload=37]
-[0m17:17:42:95005    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=60, padding_size=18, payload=41]
-[0m17:17:42:95079    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=18,payload=25]
-[0m17:17:42:95258    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=6, payload=37]
+Enter filename: 23:25:45:773814    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=44, padding_size=5,payload=38]
+[0m23:25:45:774291    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=44, padding_size=18, payload=25]
+[0m23:25:45:774575    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=44, padding_size=6,payload=37]
+[0m23:25:45:775493    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=6476, padding_size=17, payload=6458]
+[0m23:25:45:775721    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=44, padding_size=6,payload=37]
+[0m23:25:45:776343    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=60, padding_size=18, payload=41]
+[0m23:25:45:776580    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=44, padding_size=18,payload=25]
+[0m23:25:45:777011    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=44, padding_size=6, payload=37]
 [0mclient.c downloaded to the current working directory
 sftp> bye
 Disconnect
-17:17:43:603623    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=96, len=12, padding_size=6,payload=5]
-[0m17:17:43:603681    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=97, len=12, padding_size=6,payload=5]
-[0m17:17:43:603949    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=96, len=12, padding_size=6, payload=5]
-[0m17:17:43:603993    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=97, len=12, padding_size=6, payload=5]
+23:25:45:777675    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=96, len=12, padding_size=6,payload=5]
+[0m23:25:45:777780    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=97, len=12, padding_size=6,payload=5]
+[0m23:25:45:778456    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=96, len=12, padding_size=6, payload=5]
+[0m23:25:45:778588    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=97, len=12, padding_size=6, payload=5]
 [0mcmp send/client.c client.c succeeded: files are identical.
 
-Script done on 2026-11-21 17:17:43+08:00 [COMMAND_EXIT_CODE="0"]
+Script done on 2026-11-21 23:25:45+08:00 [COMMAND_EXIT_CODE="0"]

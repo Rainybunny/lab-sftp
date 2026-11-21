@@ -1,3 +1,3 @@
-Frames 15 and 16 show NEWKEYS from the client and server, respectively. Frames 17 and 18 show the next TCP payload in each direction. Each highlighted 52-byte payload contains 32 bytes of encrypted SSH data and a 20-byte MAC.
+Frames 16 and 18 show the NEWKEYS message from the server and the client, respectively. Frames 20 and 22 show the next TCP payload in each direction. Each highlighted 52-byte payload contains 32 bytes of encrypted SSH data and a 20-byte MAC.
 
-In CP3.png the client uses TCP port 47058 and the server uses port 22. Lines 12–15 of session.typescript identify the two NEWKEYS messages and the subsequent encrypted ssh-userauth service request (type 5) and acceptance (type 6).
+CP3.png selects the client-to-server frame (TCP source port 47654, destination port 22); CP3-server.png selects the server-to-client frame (source port 22, destination port 47654). Lines 12–15 of session.typescript identify the two NEWKEYS messages and the subsequent encrypted ssh-userauth service request (type 5) and acceptance (type 6).

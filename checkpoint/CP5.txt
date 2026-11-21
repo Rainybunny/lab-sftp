@@ -2,12 +2,12 @@ The client opened channel 1 with an initial window of 64,000 bytes. The server c
 
 Line 22 ~ 30 in session.typescript:
 
-17:16:28:467784    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=90, len=44, padding_size=19,payload=24]
-17:16:28:468029    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=91, len=28, padding_size=10, payload=17]
-17:16:28:468064   [NOTICE] ssh_channel_open_session (channel.c:190) - channel opened local id=1 window=64000 maxpacket=32768 remote id=0 window=32768 maxpacket=4096
-17:16:28:468134    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=98, len=44, padding_size=16,payload=27]
-17:16:28:468609    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=99, len=12, padding_size=6, payload=5]
-17:16:28:468659   [NOTICE] ssh_channel_request_sftp (channel.c:332) - SFTP subsystem request succeeded
-17:16:28:468725    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=28, padding_size=9,payload=18]
-17:16:28:468991    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=60, padding_size=15, payload=44]
-17:16:28:469027   [NOTICE] sftp_init (sftp.c:237) - SFTP version 3 initialized
+23:25:45:767373    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=90, len=44, padding_size=19,payload=24]
+23:25:45:768015    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=91, len=28, padding_size=10, payload=17]
+23:25:45:768095   [NOTICE] ssh_channel_open_session (channel.c:190) - channel opened local id=1 window=64000 maxpacket=32768 remote id=0 window=32768 maxpacket=4096
+23:25:45:768303    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=98, len=44, padding_size=16,payload=27]
+23:25:45:769154    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=99, len=12, padding_size=6, payload=5]
+23:25:45:769301   [NOTICE] ssh_channel_request_sftp (channel.c:332) - SFTP subsystem request succeeded
+23:25:45:769476    [DEBUG] ssh_packet_send (packet.c:356) - packet: wrote [type=94, len=28, padding_size=9,payload=18]
+23:25:45:769949    [DEBUG] ssh_packet_receive (packet.c:267) - packet: received [type=94, len=60, padding_size=15, payload=44]
+23:25:45:770061   [NOTICE] sftp_init (sftp.c:237) - SFTP version 3 initialized
