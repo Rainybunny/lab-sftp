@@ -138,6 +138,31 @@ static int packet_hmac_verify(ssh_session session, const void *data, size_t len,
     return SSH_ERROR;
 }
 
+/* Message types that the protocol layers know how to consume. */
+static bool packet_type_known(uint8_t type) {
+    switch (type) {
+        case SSH_MSG_DISCONNECT:
+        case SSH_MSG_SERVICE_REQUEST:
+        case SSH_MSG_SERVICE_ACCEPT:
+        case SSH_MSG_KEXINIT:
+        case SSH_MSG_NEWKEYS:
+        case SSH_MSG_KEXDH_INIT:
+        case SSH_MSG_KEXDH_REPLY:
+        case SSH_MSG_USERAUTH_REQUEST:
+        case SSH_MSG_USERAUTH_FAILURE:
+        case SSH_MSG_USERAUTH_SUCCESS:
+        case SSH_MSG_USERAUTH_BANNER:
+        case SSH_MSG_USERAUTH_PASSWD_CHANGEREQ:
+        case SSH_MSG_GLOBAL_REQUEST:
+        case SSH_MSG_REQUEST_SUCCESS:
+        case SSH_MSG_REQUEST_FAILURE:
+            return true;
+        default:
+            return type >= SSH_MSG_CHANNEL_OPEN &&
+                   type <= SSH_MSG_CHANNEL_FAILURE;
+    }
+}
+
 /**
  * @brief Read a binary packet from socket and decrypt it if key exchange is
  * completed. Extract the SSH message packet and store it in the session's
@@ -157,7 +182,9 @@ int ssh_packet_receive(ssh_session session) {
     uint32_t packet_len;
     size_t packet_size, remaining;
     uint8_t padding;
+    uint8_t type;
 
+retry:
     if (ssh_buffer_reinit(session->in_buffer) != SSH_OK ||
         ssh_socket_read(session->socket, first_block, blocksize) != SSH_OK) {
         goto error;
@@ -212,7 +239,30 @@ int ssh_packet_receive(ssh_session session) {
     ssh_buffer_pass_bytes(session->in_buffer, sizeof(packet_len) + 1);
     ssh_buffer_pass_bytes_end(session->in_buffer, padding);
     session->recv_seq++;
-    free(rest);
+    SAFE_FREE(rest);
+
+    type = ((uint8_t *)ssh_buffer_get(session->in_buffer))[0];
+    if (type == SSH_MSG_IGNORE || type == SSH_MSG_DEBUG) {
+        LOG_DEBUG("packet: ignored message type %u", type);
+        goto retry;
+    }
+    if (type == SSH_MSG_UNIMPLEMENTED) {
+        LOG_DEBUG("packet: ignored SSH_MSG_UNIMPLEMENTED");
+        goto retry;
+    }
+    if (!packet_type_known(type)) {
+        if (ssh_buffer_pack(session->out_buffer, "bd",
+                            SSH_MSG_UNIMPLEMENTED,
+                            session->recv_seq - 1) != SSH_OK ||
+            ssh_packet_send(session) != SSH_OK) {
+            ssh_set_error(SSH_FATAL,
+                          "cannot respond to unrecognized message type %u",
+                          type);
+            goto error;
+        }
+        LOG_DEBUG("packet: sent SSH_MSG_UNIMPLEMENTED for type %u", type);
+        goto retry;
+    }
 
     LOG_DEBUG("packet: received [type=%u, len=%u, padding_size=%u, payload=%u]",
               packet[sizeof(packet_len) + 1], packet_len, padding,
