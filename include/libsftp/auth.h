@@ -15,5 +15,6 @@
 #include "libssh.h"
 
 int ssh_request_auth(ssh_session session);
+int ssh_read_password(char *password, size_t size);
 
 #endif /* AUTH_H */

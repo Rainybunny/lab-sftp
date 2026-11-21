@@ -1,0 +1,5 @@
+The client received the server identification string SSH-2.0-paramiko_3.5.1.
+
+Line 5 in session.typescript:
+
+17:16:24:805857   [NOTICE] receive_id_str (session.c:221) - server identification: SSH-2.0-paramiko_3.5.1

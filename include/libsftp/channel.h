@@ -25,7 +25,10 @@ struct ssh_channel_struct {
     uint32_t remote_window;
     int remote_eof; /* end of file received */
     uint32_t remote_maxpacket;
-    ssh_buffer out_buffer;
+    int opened;
+    int close_sent;
+    int close_received;
+    ssh_buffer in_buffer;
 };
 
 typedef struct ssh_channel_struct *ssh_channel;

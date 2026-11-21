@@ -11,228 +11,224 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "libsftp/auth.h"
 #include "libsftp/libsftp.h"
+#include "libsftp/util.h"
 
 #define MAX_BUF_SIZE 16384
+#define MAX_FILENAME 50
 
-void prompt() {
-    fprintf(stdout, "%s", "sftp> ");
-    fflush(stdout);
+static const char *strip_filename(const char *filename) {
+    const char *slash = strrchr(filename, '/');
+    return slash != NULL ? slash + 1 : filename;
 }
 
-char* strip_filename(char* filename) {
-    char* pos;
-    for(pos = filename + strlen(filename); pos != filename; pos--) {
-        if(*pos == '/') return pos + 1;
+static int get_filename(char filename[MAX_FILENAME + 2]) {
+    fputs("Enter filename: ", stdout);
+    fflush(stdout);
+    if (scanf("%51s", filename) != 1 || strlen(filename) > MAX_FILENAME ||
+        *strip_filename(filename) == '\0') {
+        fputs("A file name of up to 50 bytes is required\n", stderr);
+        return -1;
     }
-    return filename;
+    return 0;
 }
 
-int get_file(sftp_session sftp) {
-    char filename[51];
-    char* stripped_name = NULL;
-    sftp_file file = NULL;
-    char buffer[MAX_BUF_SIZE];
-    int nbytes, nwritten, rc;
-    int fd;
+static int write_all(int fd, const char *buffer, size_t count) {
+    while (count > 0) {
+        ssize_t written = write(fd, buffer, count);
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
+        if (written <= 0) {
+            return -1;
+        }
+        buffer += written;
+        count -= written;
+    }
+    return 0;
+}
 
-    fprintf(stdout, "%s", "Enter filename: ");
-    fflush(stdout);
-    fscanf(stdin, "%50s", filename);
-    stripped_name = strip_filename(filename);
+static int get_file(sftp_session sftp) {
+    char filename[MAX_FILENAME + 2];
+    char buffer[MAX_BUF_SIZE];
+    const char *local_name;
+    sftp_file file;
+    int fd;
+    int result = -1;
+
+    if (get_filename(filename) != 0) return -1;
+    local_name = strip_filename(filename);
 
     file = sftp_open(sftp, filename, O_RDONLY, 0);
     if (file == NULL) {
-        fprintf(stderr, "Can not open remote file %s", filename);
+        fprintf(stderr, "Cannot open remote file %s: %s\n", filename, ssh_get_error());
         return -1;
     }
 
-
-    fd = open(stripped_name, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+    fd = open(local_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
     if (fd < 0) {
+        fprintf(stderr, "Cannot open local file for writing: %s\n", strerror(errno));
         sftp_close(file);
-        fprintf(stderr, "Can't open file for writing: %s\n", strerror(errno));
         return -1;
     }
 
-    while (1) {
-        nbytes = sftp_read(file, buffer, sizeof(buffer));
-        if (nbytes == 0) {
-            break; /* EOF */
-        } else if (nbytes < 0) {
-            fprintf(stderr, "Error while reading file: %s\n", ssh_get_error());
-            sftp_close(file);
-            close(fd);
-            return -1;
+    for (;;) {
+        int32_t received = sftp_read(file, buffer, sizeof(buffer));
+        if (received == 0) {
+            result = 0;
+            break;
         }
-
-        nwritten = write(fd, buffer, nbytes);
-        if (nwritten != nbytes) {
-            fprintf(stderr, "Error writing: %s\n", strerror(errno));
-            sftp_close(file);
-            close(fd);
-            return -1;
+        if (received < 0) {
+            fprintf(stderr, "Cannot read remote file: %s\n", ssh_get_error());
+            break;
+        }
+        if (write_all(fd, buffer, received) != 0) {
+            fprintf(stderr, "Cannot write local file: %s\n", strerror(errno));
+            break;
         }
     }
 
-    fprintf(stdout, "%s downloaded to the current working direcrtory\n", stripped_name);
-
-    rc = sftp_close(file);
-    if (rc != SSH_OK) {
-        fprintf(stderr, "Can't close the remote file: %s\n", ssh_get_error());
-        return -1;
+    if (close(fd) != 0) {
+        fprintf(stderr, "Cannot close local file: %s\n", strerror(errno));
+        result = -1;
     }
-    close(fd);
-
-    return 0;
+    if (sftp_close(file) != SSH_OK) {
+        fprintf(stderr, "Cannot close remote file: %s\n", ssh_get_error());
+        result = -1;
+    }
+    if (result == 0) {
+        printf("%s downloaded to the current working directory\n", local_name);
+    }
+    return result;
 }
 
-int put_file(sftp_session sftp) {
-    char filename[51];
-    char* stripped_name = NULL;
-    sftp_file file = NULL;
+static int put_file(sftp_session sftp) {
+    char filename[MAX_FILENAME + 2];
     char buffer[MAX_BUF_SIZE];
-    int nbytes, nwritten, rc;
+    const char *remote_name;
+    sftp_file file;
     int fd;
+    int result = -1;
 
-    fprintf(stdout, "%s", "Enter filename: ");
-    fflush(stdout);
-    fscanf(stdin, "%50s", filename);
-    stripped_name = strip_filename(filename);
-
-    file = sftp_open(sftp, stripped_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
-    if (file == NULL) {
-        fprintf(stderr, "Can not open remote file %s", stripped_name);
-        return -1;
-    }
+    if (get_filename(filename) != 0) return -1;
+    remote_name = strip_filename(filename);
 
     fd = open(filename, O_RDONLY);
     if (fd < 0) {
-        fprintf(stderr, "Can't open file for reading: %s\n", strerror(errno));
-        sftp_close(file);
+        fprintf(stderr, "Cannot open local file for reading: %s\n", strerror(errno));
         return -1;
     }
 
-    while (1) {
-        nbytes = read(fd, buffer, sizeof(buffer));
-        if (nbytes == 0) {
-            break; /* EOF */
-        } else if (nbytes < 0) {
-            fprintf(stderr, "Error while reading file: %s\n", strerror(errno));
-            sftp_close(file);
-            close(fd);
-            return -1;
-        }
-
-        nwritten = sftp_write(file, buffer, nbytes);
-        if (nwritten != nbytes) {
-            fprintf(stderr, "Error writing: %s\n", ssh_get_error());
-            sftp_close(file);
-            close(fd);
-            return -1;
-        }
-    }
-
-    fprintf(stdout, "%s uploaded to the remote home directory\n", stripped_name);
-
-    rc = sftp_close(file);
-    if (rc != SSH_OK) {
-        fprintf(stderr, "Can't close the remote file: %s\n", ssh_get_error());
+    file = sftp_open(sftp, remote_name, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+    if (file == NULL) {
+        fprintf(stderr, "Cannot open remote file %s: %s\n", remote_name, ssh_get_error());
+        close(fd);
         return -1;
     }
+
+    for (;;) {
+        ssize_t received = read(fd, buffer, sizeof(buffer));
+        if (received == 0) {
+            result = 0;
+            break;
+        }
+        if (received < 0) {
+            if (errno == EINTR) continue;
+            fprintf(stderr, "Cannot read local file: %s\n", strerror(errno));
+            break;
+        }
+        if (sftp_write(file, buffer, received) != received) {
+            fprintf(stderr, "Cannot write remote file: %s\n", ssh_get_error());
+            break;
+        }
+    }
+
     close(fd);
-
-    return 0;
+    if (sftp_close(file) != SSH_OK) {
+        fprintf(stderr, "Cannot close remote file: %s\n", ssh_get_error());
+        result = -1;
+    }
+    if (result == 0) {
+        printf("%s uploaded to the remote home directory\n", remote_name);
+    }
+    return result;
 }
 
-int main(int argc, char** argv) {
-    int rc;
+int main(int argc, char **argv) {
+    ssh_session session;
+    sftp_session sftp = NULL;
     char password[100];
-    char cmd[11] = {'\0'};
-    char* host = NULL;
+    char command[11];
+    int rc;
+    int result = EXIT_FAILURE;
 
     if (argc != 2) {
-        fprintf(stderr, "Usage: ./client username@hostname\n");
-        exit(1);
-    } else {
-        host = argv[1];
+        fprintf(stderr, "Usage: %s username@hostname\n", argv[0]);
+        return EXIT_FAILURE;
     }
 
-    /* Transport Layer */
-    ssh_session session = ssh_new();
+    signal(SIGPIPE, SIG_IGN);
+    session = ssh_new();
     if (session == NULL) {
-        fprintf(stderr, "%s", ssh_get_error());
-        exit(1);
+        fprintf(stderr, "Cannot create SSH session: %s\n", ssh_get_error());
+        return EXIT_FAILURE;
     }
 
-    ssh_options_set(session, SSH_OPTIONS_HOST, host);
-
-    rc = ssh_connect(session);
-    if (rc != SSH_OK) {
-        fprintf(stderr, "%s", ssh_get_error());
-        exit(1);
+    if (ssh_options_set(session, SSH_OPTIONS_HOST, argv[1]) != SSH_OK ||
+        ssh_connect(session) != SSH_OK) {
+        fprintf(stderr, "Cannot connect: %s\n", ssh_get_error());
+        goto cleanup;
     }
 
-    /* Authentication Layer */
-    rc = SSH_ERROR;
-    while (rc != SSH_OK) {
-        ssh_get_password(password);
-        rc = ssh_userauth_password(session, password);
-        switch (rc) {
-            case SSH_OK:
-                break;
-            case SSH_AGAIN:
-                fprintf(stdout, "%s", ssh_get_error());
-                break;
-            case SSH_ERROR:
-                fprintf(stdout, "%s", ssh_get_error());
-                exit(1);
+    do {
+        if (ssh_read_password(password, sizeof(password)) != SSH_OK) {
+            fprintf(stderr, "%s\n", ssh_get_error());
+            goto cleanup;
         }
+        rc = ssh_userauth_password(session, password);
+        explicit_bzero(password, sizeof(password));
+        if (rc != SSH_OK) {
+            fprintf(stderr, "%s\n", ssh_get_error());
+        }
+    } while (rc == SSH_AGAIN);
+
+    if (rc != SSH_OK) goto cleanup;
+
+    sftp = sftp_new(session);
+    if (sftp == NULL || sftp_init(sftp) != SSH_OK) {
+        fprintf(stderr, "Cannot start SFTP: %s\n", ssh_get_error());
+        goto cleanup;
     }
 
-    /* Connection Layer & SFTP Layer */
-    sftp_session sftp = sftp_new(session);
-    if (sftp == NULL) {
-        fprintf(stderr, "%s", ssh_get_error());
-        exit(1);
-    }
-
-    rc = sftp_init(sftp);
-    if (rc != SSH_OK) {
-        fprintf(stderr, "%s", ssh_get_error());
-        exit(1);
-    }
-
-    /* File manipulation: interactive shell */
-    while (1) {
-        prompt();
-        fscanf(stdin, "%10s", cmd);
-        if (strcmp(cmd, "get") == 0) {
-            if (get_file(sftp) != 0) {
-                fprintf(stderr, "%s", ssh_get_error());
-                break;
-            }
-        } else if (strcmp(cmd, "put") == 0) {
-            if (put_file(sftp) != 0) {
-                fprintf(stderr, "%s", ssh_get_error());
-                break;
-            }
-        } else if (strcmp(cmd, "bye") == 0) {
-            fprintf(stdout, "%s", "Disconnect\n");
+    for (;;) {
+        fputs("sftp> ", stdout);
+        fflush(stdout);
+        if (scanf("%10s", command) != 1) {
+            if (feof(stdin)) break;
+            goto cleanup;
+        }
+        if (strcmp(command, "get") == 0) {
+            if (get_file(sftp) != 0) goto cleanup;
+        } else if (strcmp(command, "put") == 0) {
+            if (put_file(sftp) != 0) goto cleanup;
+        } else if (strcmp(command, "bye") == 0) {
+            puts("Disconnect");
             break;
         } else {
-            fprintf(stderr,
-                    "Unsupported command: %s. Only supports 'get' and 'put'\n",
-                    cmd);
+            fprintf(stderr, "Unsupported command: %s. Use get, put, or bye.\n", command);
         }
     }
+    result = EXIT_SUCCESS;
 
+cleanup:
     sftp_free(sftp);
     ssh_free(session);
-
-    return 0;
+    return result;
 }

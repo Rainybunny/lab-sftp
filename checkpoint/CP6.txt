@@ -1,0 +1,33 @@
+The client uploaded client.c and downloaded it in the same session. The cmp result confirms that the downloaded file matches the original byte for byte.
+
+Line 31 ~ 59 in session.typescript:
+
+sftp> put send/client.c
+Enter filename: 17:17:19:593787    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=60, padding_size=17,payload=42]
+17:17:19:594371    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=18, payload=25]
+17:17:19:594496    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=4124, padding_size=18,payload=4105]
+17:17:19:594543    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=2396, padding_size=18,payload=2377]
+17:17:19:594693    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=93, len=28, padding_size=18, payload=9]
+17:17:19:594976    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=6, payload=37]
+17:17:19:595050    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=18,payload=25]
+17:17:19:595338    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=6, payload=37]
+client.c uploaded to the remote home directory
+sftp> get client.c
+Enter filename: 17:17:42:93372    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=5,payload=38]
+17:17:42:93786    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=18, payload=25]
+17:17:42:94006    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=6,payload=37]
+17:17:42:94382    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=6476, padding_size=17, payload=6458]
+17:17:42:94826    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=6,payload=37]
+17:17:42:95005    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=60, padding_size=18, payload=41]
+17:17:42:95079    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=94, len=44, padding_size=18,payload=25]
+17:17:42:95258    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=94, len=44, padding_size=6, payload=37]
+client.c downloaded to the current working directory
+sftp> bye
+Disconnect
+17:17:43:603623    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=96, len=12, padding_size=6,payload=5]
+17:17:43:603681    [DEBUG] ssh_packet_send (packet.c:306) - packet: wrote [type=97, len=12, padding_size=6,payload=5]
+17:17:43:603949    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=96, len=12, padding_size=6, payload=5]
+17:17:43:603993    [DEBUG] ssh_packet_receive (packet.c:217) - packet: received [type=97, len=12, padding_size=6, payload=5]
+cmp send/client.c client.c succeeded: files are identical.
+
+Script done on 2026-11-21 17:17:43+08:00 [COMMAND_EXIT_CODE="0"]
