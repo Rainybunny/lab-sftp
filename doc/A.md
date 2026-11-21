@@ -37,4 +37,4 @@ git diff --check
 
 无共同加密算法、服务端在标识前关闭连接、服务确认包 MAC 错误时，`ssh_connect` 均返回 `SSH_ERROR`。
 
-待联调项为合并 B 的实现后运行同一会话的上传下载往返，并按计划第四部分取评分用证据。
+合并后已在 Paramiko 3.5.1 回环服务上复测通过。评分会话的标识、协商结果和 NEWKEYS 记录见 [session.typescript 第 5 至 15 行](../checkpoint/session.typescript)。[抓包截图](../checkpoint/CP3.png)的第 15、16 帧显示双方 NEWKEYS，第 17、18 帧显示随后服务请求和确认的密文。

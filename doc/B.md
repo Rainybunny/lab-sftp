@@ -62,4 +62,4 @@ tshark -r build/roundtrip.pcap \
 | CP5 | `channel opened`、`SFTP subsystem request succeeded` 所在行。 |
 | CP6 | 上传、下载及 `cmp` 成功的记录。 |
 
-正式提交使用这次手动会话的实际证据。材料齐全后再整理 `checkpoint/` 的说明、`not-implemented.pdf` 和评分 ZIP。
+评分会话的[终端记录](../checkpoint/session.typescript)第 20 至 30 行记录了认证、通道和 SFTP v3 初始化成功，第 31 至 59 行记录了上传、下载、逐字节比较成功及退出码 0。合并到 `main` 后重新构建并运行 `sh test/roundtrip.sh lab@127.0.0.1`，再次通过 `cmp`。六项检查点材料齐全，按 README 提交空的 `not-implemented.pdf`。
